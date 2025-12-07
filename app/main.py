@@ -163,6 +163,13 @@ def edit_calculation_page(request: Request, calc_id: str):
 
 
 # ------------------------------------------------------------------------------
+
+@app.get("/profile", response_class=HTMLResponse, tags=["web"])
+def profile_page(request: Request):
+    """
+    User profile page for viewing and editing account info.
+    """
+    return templates.TemplateResponse("profile.html", {"request": request})
 # Health Endpoint
 # ------------------------------------------------------------------------------
 @app.get("/health", tags=["health"])
@@ -400,3 +407,83 @@ def delete_calculation(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("app.main:app", host="127.0.0.1", port=8001, log_level="info")
+
+
+# ------------------------------------------------------------------------------
+# User Profile Endpoints
+# ------------------------------------------------------------------------------
+@app.get("/users/me", response_model=UserResponse, tags=["users"])
+def get_current_user_profile(
+    current_user = Depends(get_current_active_user)
+):
+    """
+    Get the current authenticated user's profile information.
+    """
+    return current_user
+
+
+@app.put("/users/me", response_model=UserResponse, tags=["users"])
+def update_current_user_profile(
+    user_update: UserUpdate,
+    current_user = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update the current authenticated user's profile information.
+    Allows updating: username, email, first_name, last_name
+    """
+    # Check if username is being updated and if it's already taken
+    if user_update.username and user_update.username != current_user.username:
+        existing_user = db.query(User).filter(User.username == user_update.username).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already taken"
+            )
+    
+    # Check if email is being updated and if it's already taken
+    if user_update.email and user_update.email != current_user.email:
+        existing_user = db.query(User).filter(User.email == user_update.email).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+    
+    # Update only the fields that were provided
+    update_data = user_update.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(current_user, field, value)
+    
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@app.put("/users/me/password", status_code=status.HTTP_200_OK, tags=["users"])
+def change_password(
+    password_update: PasswordUpdate,
+    current_user = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Change the current authenticated user's password.
+    Requires: current password, new password, and confirmation
+    """
+    # Verify current password
+    if not current_user.verify_password(password_update.current_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect"
+        )
+    
+    # Hash and update the new password
+    hashed_password = User.hash_password(password_update.new_password)
+    current_user.password = hashed_password
+    current_user.updated_at = datetime.utcnow()
+    
+    db.commit()
+    return {"message": "Password successfully updated"}
+
+

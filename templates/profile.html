@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Profile</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <style>
+        body {
+            background: #f5f5f5;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            max-width: 900px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .section {
+            background: white;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #333;
+        }
+        .info-box {
+            background: #fafafa;
+            padding: 15px;
+            border-left: 3px solid #007bff;
+            margin: 15px 0;
+        }
+        .info-box p {
+            margin: 5px 0;
+        }
+        input[type="text"],
+        input[type="email"],
+        input[type="password"] {
+            width: 100%;
+            padding: 8px;
+            margin: 8px 0;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            box-sizing: border-box;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .back-btn {
+            background: #6c757d;
+            margin-left: 10px;
+        }
+        .back-btn:hover {
+            background: #545b62;
+        }
+        .message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 3px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Profile Settings</h1>
+        
+        <div id="messages"></div>
+
+        <div class="section">
+            <h2>Account Info</h2>
+            <div class="info-box">
+                <p><b>Username:</b> <span id="show_username"></span></p>
+                <p><b>Email:</b> <span id="show_email"></span></p>
+                <p><b>Name:</b> <span id="show_name"></span></p>
+                <p><b>Joined:</b> <span id="show_joined"></span></p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Edit Profile</h2>
+            <form id="profileForm">
+                <label>Username</label>
+                <input type="text" id="username" name="username">
+                
+                <label>Email</label>
+                <input type="email" id="email" name="email">
+                
+                <label>First Name</label>
+                <input type="text" id="first_name" name="first_name">
+                
+                <label>Last Name</label>
+                <input type="text" id="last_name" name="last_name">
+                
+                <button type="submit">Save Changes</button>
+                <button type="button" class="back-btn" onclick="location.href='/dashboard'">Cancel</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h2>Change Password</h2>
+            <form id="passwordForm">
+                <label>Current Password</label>
+                <input type="password" id="old_pass" required>
+                
+                <label>New Password</label>
+                <input type="password" id="new_pass" required>
+                <small style="color: #666;">Must have uppercase, lowercase, number, and special character</small>
+                
+                <label>Confirm New Password</label>
+                <input type="password" id="confirm_pass" required>
+                
+                <button type="submit">Update Password</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('access_token');
+        if (!token) location.href = '/login';
+
+        function showMsg(text, isError) {
+            const div = document.createElement('div');
+            div.className = 'message ' + (isError ? 'error' : 'success');
+            div.textContent = text;
+            document.getElementById('messages').appendChild(div);
+            setTimeout(() => div.remove(), 4000);
+        }
+
+        async function loadUser() {
+            const res = await fetch('/users/me', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            
+            if (!res.ok) {
+                if (res.status === 401) location.href = '/login';
+                return;
+            }
+
+            const user = await res.json();
+            document.getElementById('show_username').textContent = user.username;
+            document.getElementById('show_email').textContent = user.email;
+            document.getElementById('show_name').textContent = user.first_name + ' ' + user.last_name;
+            document.getElementById('show_joined').textContent = new Date(user.created_at).toLocaleDateString();
+            
+            document.getElementById('username').value = user.username;
+            document.getElementById('email').value = user.email;
+            document.getElementById('first_name').value = user.first_name;
+            document.getElementById('last_name').value = user.last_name;
+        }
+
+        document.getElementById('profileForm').onsubmit = async (e) => {
+            e.preventDefault();
+            
+            const data = {
+                username: document.getElementById('username').value,
+                email: document.getElementById('email').value,
+                first_name: document.getElementById('first_name').value,
+                last_name: document.getElementById('last_name').value
+            };
+
+            const res = await fetch('/users/me', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                showMsg('Profile updated!');
+                loadUser();
+            } else {
+                const err = await res.json();
+                showMsg(err.detail || 'Update failed', true);
+            }
+        };
+
+        document.getElementById('passwordForm').onsubmit = async (e) => {
+            e.preventDefault();
+            
+            const newPass = document.getElementById('new_pass').value;
+            const confirmPass = document.getElementById('confirm_pass').value;
+
+            if (newPass !== confirmPass) {
+                showMsg('Passwords don\'t match', true);
+                return;
+            }
+
+            const data = {
+                current_password: document.getElementById('old_pass').value,
+                new_password: newPass,
+                confirm_new_password: confirmPass
+            };
+
+            const res = await fetch('/users/me/password', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                showMsg('Password changed! Logging out...');
+                document.getElementById('passwordForm').reset();
+                setTimeout(() => {
+                    localStorage.removeItem('access_token');
+                    location.href = '/login';
+                }, 2000);
+            } else {
+                const err = await res.json();
+                showMsg(err.detail || 'Password change failed', true);
+            }
+        };
+
+        loadUser();
+    </script>
+</body>
+</html>
